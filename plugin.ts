@@ -63,7 +63,7 @@ export class Plugin extends AbstractPlugin {
 
     private static imageFry(path: string): void {
         // Credit to 44100hertz @ https://gist.github.com/44100hertz/ec0af5c47b4620966b732e72adad33dc
-        
+
         let command = "";
         switch (Math.floor(Math.random() * 23)) {
         case 0:
