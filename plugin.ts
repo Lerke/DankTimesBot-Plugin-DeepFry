@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec, execSync } from "child_process";
 import TelegramBot from "node-telegram-bot-api";
 import { BotCommand } from "../../src/bot-commands/bot-command";
 import { Chat } from "../../src/chat/chat";
@@ -13,6 +13,10 @@ export class Plugin extends AbstractPlugin {
 
     constructor() {
         super("DeepFry", "1.0.0");
+        this._hasDependencies = Plugin.checkSystemDependencies();
+        if (!this._hasDependencies) {
+            console.log("DeepFry: ImageMagick not found! Plugin cannot function");
+        }
     }
 
     /**
@@ -24,9 +28,10 @@ export class Plugin extends AbstractPlugin {
     }
 
     private async deepFry(chat: Chat, user: User, msg: TelegramBot.Message, match: string): Promise<string> {
-        // if (!this._hasDependencies) {
-        //     return "Plugin system dependencies not available! :( I can not deepfry this image";
-        // }
+        if (!this._hasDependencies) {
+            await this.sendMessage(chat.id, "🍟 I don't know how to fry", msg.reply_to_message?.message_id ?? -1);
+            return "";
+        }
 
         // Check if message has a photo
         const photo = msg.reply_to_message?.photo ?? msg.photo;
@@ -37,6 +42,9 @@ export class Plugin extends AbstractPlugin {
             this.retrieveFile(chat.id, imageToFry.file_id)
                 .then(async data => {
                     const fryFactor = Plugin.getDeepFryScaleRatio(msg);
+
+                    await Plugin.resizeImageToSmallerDimensions(data!, imageToFry);
+
                     for (let i = 0; i < fryFactor; i++) {
                         await Plugin.imageFry(data!);
                     }
@@ -55,8 +63,13 @@ export class Plugin extends AbstractPlugin {
         return "";
     }
 
-    private static async checkSystemDependencies(): Promise<any> {
-
+    private static checkSystemDependencies(): boolean {
+        try {
+            const output = execSync("type -p convert");
+            return /convert/.test(output.toString());
+        } catch {
+            return false;
+        }
     }
 
     private static getDeepFryScaleRatio(msg: TelegramBot.Message) {
@@ -66,6 +79,19 @@ export class Plugin extends AbstractPlugin {
             return Math.min(factor, this.MAX_FRY_FACTOR);
         }
         return this.DEFAULT_FRY_FACTOR;
+    }
+
+    private static async resizeImageToSmallerDimensions(path: string, photo: TelegramBot.PhotoSize): Promise<any> {
+        const command = `convert ${path} -resize 800x600 ${path}`;
+        return new Promise((resolve, reject) => {
+            exec(command, (err, stdout, stderr) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(stdout);
+            });
+        });
     }
 
     private static async resetImageToOriginalDimensions(path: string, photo: TelegramBot.PhotoSize): Promise<any> {
