@@ -9,6 +9,7 @@ export class Plugin extends AbstractPlugin {
     private _hasDependencies = false;
 
     private static readonly DEFAULT_FRY_FACTOR = 10;
+    private static readonly MAX_FRY_FACTOR = 100;
 
     constructor() {
         super("DeepFry", "1.0.0");
@@ -22,10 +23,10 @@ export class Plugin extends AbstractPlugin {
         return [command];
     }
 
-    private deepFry(chat: Chat, user: User, msg: TelegramBot.Message, match: string): string {
-        if (!this._hasDependencies) {
-            return "Plugin system dependencies not available! :( I can not deepfry this image";
-        }
+    private async deepFry(chat: Chat, user: User, msg: TelegramBot.Message, match: string): Promise<string> {
+        // if (!this._hasDependencies) {
+        //     return "Plugin system dependencies not available! :( I can not deepfry this image";
+        // }
 
         // Check if message has a photo
         const photo = msg.reply_to_message?.photo ?? msg.photo;
@@ -34,34 +35,53 @@ export class Plugin extends AbstractPlugin {
             // Find the largest resolution image by simply multiplying w x h
             const imageToFry = photo.reduce((p, c) => (c.width * c.height) > (p.width * p.height) ? c:p, photo[0]);
             this.retrieveFile(chat.id, imageToFry.file_id)
-                .then(data => {
-                    for (let i = 0; i < 5; i++) {
-                        Plugin.imageFry(data!);
+                .then(async data => {
+                    const fryFactor = Plugin.getDeepFryScaleRatio(msg);
+                    for (let i = 0; i < fryFactor; i++) {
+                        await Plugin.imageFry(data!);
                     }
-                    Plugin.resetImageToOriginalDimensions(data!, imageToFry);
+
+                    // Reset image scale back to original dimensions
+                    await Plugin.resetImageToOriginalDimensions(data!, imageToFry);
+
                     // Respond with fried image
-                    this.sendFile(chat.id, data!).then();
-                }).then();
+                    const fryCaption = `🍟 I fried your picture ${fryFactor} times!`;
+                    await this.sendFile(chat.id, data!, msg.message_id, false, fryCaption);
+                });
+        } else {
+            await this.sendMessage(chat.id, "🍟 I don't know how to fry that", msg.reply_to_message?.message_id ?? -1);
         }
 
         return "";
     }
 
+    private static async checkSystemDependencies(): Promise<any> {
+
+    }
+
     private static getDeepFryScaleRatio(msg: TelegramBot.Message) {
-        const matches = /^\/deepfry\s*(\d+)?\s*$/.exec(msg.text ?? "");
-        if (matches?.groups) {
-            const factor = matches.groups[0] ?? this.DEFAULT_FRY_FACTOR;
-            return +factor;
+        const matches = (msg.text ?? "").match(/(\d+)/);
+        if (matches && matches.length > 1) {
+            const factor = Math.max(1, +(matches[1] ?? this.DEFAULT_FRY_FACTOR));
+            return Math.min(factor, this.MAX_FRY_FACTOR);
         }
         return this.DEFAULT_FRY_FACTOR;
     }
 
-    private static resetImageToOriginalDimensions(path: string, photo: TelegramBot.PhotoSize) {
+    private static async resetImageToOriginalDimensions(path: string, photo: TelegramBot.PhotoSize): Promise<any> {
         const command = `convert ${path} -resize ${photo.width}x${photo.height} ${path}`;
-        exec(command);
+        return new Promise((resolve, reject) => {
+            exec(command, (err, stdout, stderr) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(stdout);
+            });
+        });
     }
 
-    private static imageFry(path: string): void {
+    private static async imageFry(path: string): Promise<any> {
         // Credit to 44100hertz @ https://gist.github.com/44100hertz/ec0af5c47b4620966b732e72adad33dc
 
         let command = "";
@@ -159,6 +179,14 @@ export class Plugin extends AbstractPlugin {
             command = `convert ${path} -swirl 90 -quality 15 ${path}`;
             break;
         }
-        exec(command);
+        return new Promise((resolve, reject) => {
+            exec(command, (err, stdout, stderr) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(stdout);
+            });
+        });
     }
 }
