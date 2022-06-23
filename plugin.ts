@@ -62,7 +62,7 @@ export class Plugin extends AbstractPlugin {
     private static getDeepFryScaleRatio(msg: TelegramBot.Message) {
         const matches = (msg.text ?? "").match(/(\d+)/);
         if (matches && matches.length > 1) {
-            const factor = Math.max(1, +(matches[1] ?? this.DEFAULT_FRY_FACTOR));
+            const factor = Math.max(1, +(matches[1] ?? this.DEFAULT_FRY_FACTOR) ?? 1);
             return Math.min(factor, this.MAX_FRY_FACTOR);
         }
         return this.DEFAULT_FRY_FACTOR;
