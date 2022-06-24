@@ -65,7 +65,7 @@ export class Plugin extends AbstractPlugin {
 
     private static checkSystemDependencies(): boolean {
         try {
-            const output = execSync("type -p convert");
+            const output = execSync("which convert");
             console.log(output);
             return /convert/.test(output.toString());
         } catch(e) {
