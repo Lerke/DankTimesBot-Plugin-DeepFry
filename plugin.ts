@@ -12,7 +12,7 @@ export class Plugin extends AbstractPlugin {
     private static readonly MAX_FRY_FACTOR = 100;
 
     constructor() {
-        super("DeepFry", "1.0.0");
+        super("DeepFry", "1.0.1");
         this._hasDependencies = Plugin.checkSystemDependencies();
         if (!this._hasDependencies) {
             console.log("DeepFry: ImageMagick not found! Plugin cannot function");
@@ -34,23 +34,38 @@ export class Plugin extends AbstractPlugin {
         }
 
         // Check if message has a photo
-        const photo = msg.reply_to_message?.photo ?? msg.photo;
+        let photo: PhotoSize | undefined = undefined; // = msg.reply_to_message?.photo ?? msg.photo;
+        if (msg.reply_to_message?.photo) {
+            const largestPhoto = msg.reply_to_message.photo.reduce((p, c) => (c.width * c.height) > (p.width * p.height) ? c:p, msg.reply_to_message.photo[0]);
+            photo = {height: largestPhoto.height, width: largestPhoto.width, fileId: largestPhoto.file_id};
+        } else if (msg.photo) {
+            const largestPhoto = msg.photo.reduce((p, c) => (c.width * c.height) > (p.width * p.height) ? c:p, msg.photo[0]);
+            photo = {height: largestPhoto.height, width: largestPhoto.width, fileId: largestPhoto.file_id};
+        } else if (msg.reply_to_message?.sticker && !msg.reply_to_message?.sticker?.is_animated) {
+            photo = ({width: msg.reply_to_message.sticker.width, height: msg.reply_to_message.sticker.height, fileId: msg.reply_to_message.sticker.file_id});
+        } else if (msg.sticker && !msg.sticker.is_animated) {
+            photo = ({width: msg.sticker.width, height: msg.sticker.height, fileId: msg.sticker.file_id});
+        }
+
         if (photo) {
             // We'll only fry the first image and ignore if more are provided
             // Find the largest resolution image by simply multiplying w x h
-            const imageToFry = photo.reduce((p, c) => (c.width * c.height) > (p.width * p.height) ? c:p, photo[0]);
-            this.retrieveFile(chat.id, imageToFry.file_id)
+            this.retrieveFile(chat.id, photo.fileId)
                 .then(async data => {
                     const fryFactor = Plugin.getDeepFryScaleRatio(msg);
 
-                    await Plugin.resizeImageToSmallerDimensions(data!, imageToFry);
+                    await Plugin.resizeImageToSmallerDimensions(data!, photo!);
 
                     for (let i = 0; i < fryFactor; i++) {
-                        await Plugin.imageFry(data!);
+                        try {
+                            await Plugin.imageFry(data!);
+                        } catch (e) {
+                            console.log("Something went wrong while frying image: " + e);
+                        }
                     }
 
                     // Reset image scale back to original dimensions
-                    await Plugin.resetImageToOriginalDimensions(data!, imageToFry);
+                    await Plugin.resetImageToOriginalDimensions(data!, photo!);
 
                     // Respond with fried image
                     const fryCaption = `🍟 I fried your picture ${fryFactor} times!`;
@@ -66,9 +81,9 @@ export class Plugin extends AbstractPlugin {
     private static checkSystemDependencies(): boolean {
         try {
             const output = execSync("which convert");
-            console.log(output);
             return /convert/.test(output.toString());
-        } catch(e) {
+        } catch (e) {
+            console.log(e.stdout);
             console.log(e);
             return false;
         }
@@ -83,7 +98,7 @@ export class Plugin extends AbstractPlugin {
         return this.DEFAULT_FRY_FACTOR;
     }
 
-    private static async resizeImageToSmallerDimensions(path: string, photo: TelegramBot.PhotoSize): Promise<any> {
+    private static async resizeImageToSmallerDimensions(path: string, photo: PhotoSize): Promise<any> {
         const command = `convert ${path} -resize 800x600 ${path}`;
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
@@ -96,7 +111,7 @@ export class Plugin extends AbstractPlugin {
         });
     }
 
-    private static async resetImageToOriginalDimensions(path: string, photo: TelegramBot.PhotoSize): Promise<any> {
+    private static async resetImageToOriginalDimensions(path: string, photo: PhotoSize): Promise<any> {
         const command = `convert ${path} -resize ${photo.width}x${photo.height} ${path}`;
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
@@ -217,4 +232,10 @@ export class Plugin extends AbstractPlugin {
             });
         });
     }
+}
+
+interface PhotoSize {
+    fileId: string;
+    width: number;
+    height: number;
 }
