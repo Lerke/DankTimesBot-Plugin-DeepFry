@@ -34,7 +34,7 @@ export class Plugin extends AbstractPlugin {
         }
 
         // Check if message has a photo
-        let photo: PhotoSize | undefined = undefined; // = msg.reply_to_message?.photo ?? msg.photo;
+        let photo: PhotoSize | undefined = undefined;
         if (msg.reply_to_message?.photo) {
             const largestPhoto = msg.reply_to_message.photo.reduce((p, c) => (c.width * c.height) > (p.width * p.height) ? c:p, msg.reply_to_message.photo[0]);
             photo = {height: largestPhoto.height, width: largestPhoto.width, fileId: largestPhoto.file_id};
@@ -72,7 +72,7 @@ export class Plugin extends AbstractPlugin {
                     await this.sendFile(chat.id, data!, msg.message_id, false, fryCaption);
                 });
         } else {
-            await this.sendMessage(chat.id, "🍟 I don't know how to fry that", msg.reply_to_message?.message_id ?? -1);
+            await this.sendMessage(chat.id, "🍟 I don't know how to fry that", msg.message_id);
         }
 
         return "";
