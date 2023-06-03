@@ -269,25 +269,25 @@ export class Plugin extends AbstractPlugin {
                 switch(seed) {
                 case 0:
                     // Bass boost that bitch
-                    return "bass 35";
+                    return "bass 55";
                 case 1:
                     return "treble 35";
                 case 2:
                     return "chorus 0.5 0.9 50 0.4 0.25 2 −t 60 0.32 0.4 2.3 −t 40 0.3 0.3 1.3 −s";
                 case 3:
-                    return "delay 0 .05 .1 .15 .2 .25";
+                    return "downsample 4";
                 case 4:
                     return "downsample 2";
                 case 5:
                     return "echo 0.8 0.9 1000 0.3";
                 case 6:
-                    return "gain 6";
+                    return "gain 8";
                 case 7:
                     return "phaser 0.89 0.85 1 0.24 2 −t";
                 case 8:
-                    return "speed 1.35";
+                    return "speed 1.65";
                 case 9:
-                    return "speed 0.65";
+                    return "speed 0.55";
                 case 10:
                     return "stretch 1.35";
                 case 11:
@@ -295,7 +295,7 @@ export class Plugin extends AbstractPlugin {
                 case 12:
                     return "tempo 1.25";
                 case 13:
-                    return "tempo 0.75";
+                    return "tempo 0.55";
                 case 14:
                     return "tremolo 40";
                 case 15:
@@ -303,9 +303,11 @@ export class Plugin extends AbstractPlugin {
                 case 16:
                     return "upsample 2";
                 case 17:
-                    return "vol 2";
+                    return "vol 8";
                 case 18:
                     return "vol -2";
+                case 19:
+                    return "gain 10";
                 default:
                     return "";
                 }
