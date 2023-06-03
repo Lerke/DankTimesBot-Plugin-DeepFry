@@ -1,9 +1,17 @@
 import { exec, execSync } from "child_process";
 import TelegramBot from "node-telegram-bot-api";
+import { tmpdir } from "os";
 import { BotCommand } from "../../src/bot-commands/bot-command";
 import { Chat } from "../../src/chat/chat";
 import { User } from "../../src/chat/user/user";
 import { AbstractPlugin } from "../../src/plugin-host/plugin/plugin";
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const fs = require("fs");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const os = require("os");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const path = require("path");
 
 export class Plugin extends AbstractPlugin {
     private _hasDependencies = false;
@@ -35,16 +43,43 @@ export class Plugin extends AbstractPlugin {
 
         // Check if message has a photo
         let photo: PhotoSize | undefined = undefined;
-        if (msg.reply_to_message?.photo) {
-            const largestPhoto = msg.reply_to_message.photo.reduce((p, c) => (c.width * c.height) > (p.width * p.height) ? c:p, msg.reply_to_message.photo[0]);
-            photo = {height: largestPhoto.height, width: largestPhoto.width, fileId: largestPhoto.file_id};
-        } else if (msg.photo) {
-            const largestPhoto = msg.photo.reduce((p, c) => (c.width * c.height) > (p.width * p.height) ? c:p, msg.photo[0]);
-            photo = {height: largestPhoto.height, width: largestPhoto.width, fileId: largestPhoto.file_id};
-        } else if (msg.reply_to_message?.sticker && !msg.reply_to_message?.sticker?.is_animated) {
-            photo = ({width: msg.reply_to_message.sticker.width, height: msg.reply_to_message.sticker.height, fileId: msg.reply_to_message.sticker.file_id});
-        } else if (msg.sticker && !msg.sticker.is_animated) {
-            photo = ({width: msg.sticker.width, height: msg.sticker.height, fileId: msg.sticker.file_id});
+        const isPhoto = !!msg.photo;
+        const isPhotoReply = !!msg.reply_to_message?.photo;
+        const isSticker = !!msg.sticker;
+        const isStickerReply = !!msg.reply_to_message?.sticker;
+        const isAnimation = !!msg.animation;
+        const isAnimationReply = !!msg.reply_to_message?.animation;
+
+        if (isPhotoReply) {
+            const largestPhoto =
+                msg.reply_to_message!.photo!.reduce((p, c) => (c.width * c.height) > (p.width * p.height) ? c:p, msg!.reply_to_message!.photo![0]!);
+            photo = {height: largestPhoto.height, width: largestPhoto.width, fileId: largestPhoto.file_id, extension: "png"};
+        } else if (isPhoto) {
+            const largestPhoto = msg.photo!.reduce((p, c) => (c.width * c.height) > (p.width * p.height) ? c:p, msg!.photo![0]!);
+            photo = {height: largestPhoto.height, width: largestPhoto.width, fileId: largestPhoto.file_id, extension: "png"};
+        } else if (isStickerReply && !msg.reply_to_message?.sticker?.is_animated) {
+            photo = ({
+                extension: "png",
+                width: msg.reply_to_message!.sticker!.width,
+                height: msg!.reply_to_message!.sticker!.height,
+                fileId: msg!.reply_to_message!.sticker!.file_id
+            });
+        } else if (isSticker && !msg.sticker!.is_animated) {
+            photo = ({width: msg.sticker!.width, height: msg.sticker!.height, fileId: msg.sticker!.file_id, extension: "png"});
+        } else if (isAnimation && /\.(gif|mp4)$/.test(msg.animation!.file_name ?? "")) {
+            photo = ({
+                extension: /\.(.+)$/.exec(msg.animation!.file_name!)![1],
+                width: msg.animation!.width,
+                height: msg.animation!.height,
+                fileId: msg.animation!.file_id
+            });
+        } else if (isAnimationReply && /\.(gif|mp4)$/.test(msg.reply_to_message!.animation?.file_name ?? "")) {
+            photo = ({
+                extension: /\.(.+)$/.exec(msg.reply_to_message!.animation!.file_name!)![1],
+                width: msg.reply_to_message!.animation!.width,
+                height: msg.reply_to_message!.animation!.height,
+                fileId: msg.reply_to_message!.animation!.file_id
+            });
         }
 
         if (photo) {
@@ -52,24 +87,61 @@ export class Plugin extends AbstractPlugin {
             // Find the largest resolution image by simply multiplying w x h
             this.retrieveFile(chat.id, photo.fileId)
                 .then(async data => {
-                    const fryFactor = Plugin.getDeepFryScaleRatio(msg);
+                    const tempDir = "";
+                    try {
+                        const fryFactor = Plugin.getDeepFryScaleRatio(msg);
 
-                    await Plugin.resizeImageToSmallerDimensions(data!, photo!);
+                        console.log("Photo extension: " + photo!.extension);
 
-                    for (let i = 0; i < fryFactor; i++) {
-                        try {
-                            await Plugin.imageFry(data!);
-                        } catch (e) {
-                            console.log("Something went wrong while frying image: " + e);
+                        if (photo.extension === "mp4" || photo.extension === "gif") {
+                            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "dtb-deepfry"));
+                            let individualFrames: string[] = [];
+                            let finalAnimation = "";
+                            let  framerate = 24;
+                            if (photo!.extension === "mp4") {
+                                // Split into individual frames using ffmpeg
+                                framerate = await Plugin.mp4Framerate(data!);
+                                individualFrames = await Plugin.mp4ToSplitImageArray(data!, tempDir);
+                            } else if (photo!.extension === "gif") {
+                                // Split into individual frames using convert
+                                console.log("gif");
+                                individualFrames = await Plugin.gifToSplitImageArray(data!, tempDir);
+                            }
+
+                            // Individually fry the image using the same filter
+                            for (let i = 0; i < fryFactor; i++) {
+                                await Plugin.imageFryArray(individualFrames);
+                            }
+
+                            console.log("framerate", framerate);
+                            finalAnimation = await Plugin.imageFramesToMp4(tempDir, framerate);
+                            console.log("Individual frames: ", individualFrames);
+                            console.log("Final image", finalAnimation);
+
+                            data = finalAnimation;
+
+                        } else {
+                            for (let i = 0; i < fryFactor; i++) {
+                                try {
+                                    await Plugin.imageFry(data!);
+                                } catch (e) {
+                                    console.log("Something went wrong while frying image: " + e);
+                                }
+                            }
+                        }
+
+                        // Respond with fried image
+                        const fryCaption = `🍟 I fried your picture ${fryFactor} times!`;
+                        await this.sendFile(chat.id, data!, msg.message_id, false, fryCaption, "video");
+
+                    } catch (e) {
+                        console.log("Frying went wrong");
+                        console.log(e);
+                    } finally {
+                        if (tempDir) {
+                            // fs.rmSync(tempDir, {recursive: true});
                         }
                     }
-
-                    // Reset image scale back to original dimensions
-                    await Plugin.resetImageToOriginalDimensions(data!, photo!);
-
-                    // Respond with fried image
-                    const fryCaption = `🍟 I fried your picture ${fryFactor} times!`;
-                    await this.sendFile(chat.id, data!, msg.message_id, false, fryCaption);
                 });
         } else {
             await this.sendMessage(chat.id, "🍟 I don't know how to fry that", msg.message_id);
@@ -80,8 +152,9 @@ export class Plugin extends AbstractPlugin {
 
     private static checkSystemDependencies(): boolean {
         try {
-            const output = execSync("which convert");
-            return /convert/.test(output.toString());
+            const outputIm = execSync("which convert");
+            const outputFfmpeg = execSync("which ffmpeg");
+            return /convert/.test(outputIm.toString()) && /ffmpeg/.test(outputFfmpeg.toString());
         } catch (e) {
             console.log(e.stdout);
             console.log(e);
@@ -98,37 +171,75 @@ export class Plugin extends AbstractPlugin {
         return this.DEFAULT_FRY_FACTOR;
     }
 
-    private static async resizeImageToSmallerDimensions(path: string, photo: PhotoSize): Promise<any> {
-        const command = `convert ${path} -resize 800x600 ${path}`;
+    private static async gifToSplitImageArray(gifPath: string, tempDir: string): Promise<string[]> {
+        const command = `convert '${gifPath}' '${tempDir}/out%06d.png'`;
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
                     reject(err);
                     return;
                 }
-                resolve(stdout);
+
+                const filesInDirectory = fs.readdirSync(tempDir).map((x: string) => `${tempDir}/${x}`);
+                resolve(filesInDirectory);
             });
         });
     }
 
-    private static async resetImageToOriginalDimensions(path: string, photo: PhotoSize): Promise<any> {
-        const command = `convert ${path} -resize ${photo.width}x${photo.height} ${path}`;
+    private static async mp4Framerate(mp4Path: string): Promise<number> {
+        const command = `ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of default=nw=1:nk=1 "${mp4Path}"`;
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
                     reject(err);
                     return;
                 }
-                resolve(stdout);
+
+                console.log("stdout", eval(stdout));
+                resolve(Math.round(+eval(stdout)));
             });
         });
     }
 
-    private static async imageFry(path: string): Promise<any> {
+    private static async mp4ToSplitImageArray(mp4Path: string, tempDir: string): Promise<string[]> {
+        const command = `ffmpeg -i '${mp4Path}' '${tempDir}/out%06d.png'`;
+        return new Promise((resolve, reject) => {
+            exec(command, (err, stdout, stderr) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+
+                const filesInDirectory = fs.readdirSync(tempDir).map((x: string) => `${tempDir}/${x}`);
+                resolve(filesInDirectory);
+            });
+        });
+    }
+
+    private static async imageFryArray(paths: string[]): Promise<any> {
+        const frySeed = Math.floor(Math.random() * 23);
+        const deepFryPan = await Promise.allSettled(paths.map((p: string) => Plugin.imageFry(p, frySeed)));
+    }
+
+    private static async imageFramesToMp4(imagePath: string, framerate: number): Promise<string> {
+        const command = `ffmpeg -framerate ${framerate} -i "${imagePath}/out%06d.png" -c:a copy \
+         -shortest -c:v libx264 -pix_fmt yuv420p -vf "crop=trunc(iw/2)*2:trunc(ih/2)*2" ${imagePath}/output.mp4`;
+        return new Promise((resolve, reject) => {
+            exec(command, (err, stdout, stderr) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(`${imagePath}/output.mp4`);
+            });
+        });
+    }
+
+    private static async imageFry(path: string, seed?: number): Promise<any> {
         // Credit to 44100hertz @ https://gist.github.com/44100hertz/ec0af5c47b4620966b732e72adad33dc
-
         let command = "";
-        switch (Math.floor(Math.random() * 23)) {
+        seed = (seed ?? Math.floor(Math.random() * 21)) % 21;
+        switch (seed) {
         case 0:
             // Resize 75%
             command = `convert ${path} -resize 75% -filter point -quality 15 ${path}`;
@@ -210,14 +321,6 @@ export class Plugin extends AbstractPlugin {
             command = `convert ${path} +noise Gaussian -attenuate 0.25 ${path}`;
             break;
         case 20:
-            // stretch horizontal
-            command = `convert ${path} -resize 109%x91% -filter point -quality 15 ${path}`;
-            break;
-        case 21:
-            // stretch vertical
-            command = `convert ${path} -resize 90%x110% -filter point -quality 15 ${path}`;
-            break;
-        case 22:
             // twisty effect
             command = `convert ${path} -swirl 90 -quality 15 ${path}`;
             break;
@@ -235,7 +338,115 @@ export class Plugin extends AbstractPlugin {
 }
 
 interface PhotoSize {
+    extension: string;
     fileId: string;
     width: number;
     height: number;
 }
+
+interface DeepFryPluginPersistentSettings {
+    userPreferences: { [userId: string]: UserDeepFryPreferences };
+}
+
+interface UserDeepFryPreferences {
+    deepfryMode: UserDeepFryDefaultMode;
+    allowList: DeepFryProfile[];
+    denyList: DeepFryProfile[];
+}
+
+enum UserDeepFryDefaultMode {
+    /**
+     * Apply all Deep Fry filters
+     */
+    All,
+
+    /**
+     * Only apply user allowedlisted filters
+     */
+    AllowList,
+
+    /**
+     * Apply all except denylisted filters
+     */
+    DenyList
+}
+
+class DeepFryProfileExtensions {
+    static DeepFryProfileDescription(profile: DeepFryProfile) {
+        switch (profile) {
+        case "resize-min-75":
+            return "Resizes the image to 75% of its original size";
+        case "resize-plus-120":
+            return "Resizes the image to 125% of its original size";
+        case "equalize-color":
+            return "Equalizes the colors of the image";
+        case "crop-1":
+            return "Crops the image by 1% from the center";
+        case "border-1":
+            return "Adds a 1% sized border to the image";
+        case "gamma-min-30":
+            return "Decreases the image its gamma by 30%";
+        case "gamma-plus-30":
+            return "Increases the image its gamma by 30%";
+        case "vignette":
+            return "Adds a vignette effect";
+        case "posterize":
+            return "Posterizes the image, reducing the total number of colors";
+        case "unsharpen":
+            return "Unsharpens the image by 5";
+        case "reduce-blue-contrast":
+            return "Reduces the blue contrast of the image";
+        case "dull-instagram":
+            return "Applies a dull instagram-like effect";
+        case "intense-instagram":
+            return "Applies an intense instagrama-like effect";
+        case "saturation-plus-50":
+            return "Increases the saturation of the image by 50%";
+        case "rotate-hue-left":
+            return "Shifts the hue of the image to the left";
+        case "normalize":
+            return "Normalizes the image";
+        case "extra-low-quality":
+            return "Applies an extra-low quality profile to the image";
+        case "increase-contrast":
+            return "Increases the contrast of the image by 50%";
+        case "remove-noise":
+            return "Denoises the image by 0.25";
+        case "add-noise":
+            return "Adds noise to the image";
+        case "stretch-horizontal":
+            return "Scales the image to 109% x 91%, stretching it horizontally";
+        case "stretch-vertical":
+            return "Scales the image to 90% x 110%, stretching it vertically";
+        case "swirl":
+            return "Adds a classic swirly to the image";
+        default:
+            return "I don't know how that command works";
+        }
+    }
+}
+
+type DeepFryProfile = "resize-min-75"
+    | "resize-plus-120"
+    | "equalize-color"
+    | "crop-1"
+    | "border-1"
+    | "gamma-min-30"
+    | "gamma-plus-30"
+    | "vignette"
+    | "posterize"
+    | "unsharpen"
+    | "reduce-blue-contrast"
+    | "dull-instagram"
+    | "intense-instagram"
+    | "saturation-plus-50"
+    | "rotate-hue-left"
+    | "normalize"
+    | "extra-low-quality"
+    | "increase-contrast"
+    | "remove-noise"
+    | "add-noise"
+    | "stretch-horizontal"
+    | "stretch-vertical"
+    | "swirl"
+
