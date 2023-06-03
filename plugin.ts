@@ -18,6 +18,7 @@ export class Plugin extends AbstractPlugin {
     private static readonly DEFAULT_FRY_FACTOR = 10;
     private static readonly MAX_FRY_FACTOR = 100;
     private static IS_DEBUG = false;
+    private static ANIMATION_FRY_LOCK = false;
 
     constructor() {
         super("DeepFry", "1.0.3");
@@ -106,9 +107,16 @@ export class Plugin extends AbstractPlugin {
                 .then(async data => {
                     const tempDir = "";
                     try {
-                        const fryFactor = Plugin.getDeepFryScaleRatio(msg);
+                        let fryFactor = Plugin.getDeepFryScaleRatio(msg);
 
                         if (photo!.extension === "mp4" || photo!.extension === "gif") {
+                            if(Plugin.ANIMATION_FRY_LOCK) {
+                                await this.sendMessage(chat.id, "🍟 I'm already frying a gif", msg.message_id);
+                                return;
+                            }
+
+                            Plugin.ANIMATION_FRY_LOCK = true;
+                            fryFactor = Math.max(20, fryFactor);
                             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "dtb-deepfry"));
                             let individualFrames: string[] = [];
                             let finalAnimation = "";
@@ -146,6 +154,7 @@ export class Plugin extends AbstractPlugin {
                         console.log("Frying went wrong");
                         console.log(e);
                     } finally {
+                        Plugin.ANIMATION_FRY_LOCK = false;
                         if (tempDir) {
                             try {
                                 fs.rmSync(data);
