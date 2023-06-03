@@ -116,7 +116,7 @@ export class Plugin extends AbstractPlugin {
                             }
 
                             Plugin.ANIMATION_FRY_LOCK = true;
-                            fryFactor = Math.max(20, fryFactor);
+                            fryFactor = Math.min(20, fryFactor);
                             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "dtb-deepfry"));
                             let individualFrames: string[] = [];
                             let finalAnimation = "";
