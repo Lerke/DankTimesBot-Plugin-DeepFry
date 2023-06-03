@@ -91,8 +91,6 @@ export class Plugin extends AbstractPlugin {
                     try {
                         const fryFactor = Plugin.getDeepFryScaleRatio(msg);
 
-                        console.log("Photo extension: " + photo!.extension);
-
                         if (photo.extension === "mp4" || photo.extension === "gif") {
                             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "dtb-deepfry"));
                             let individualFrames: string[] = [];
@@ -104,7 +102,6 @@ export class Plugin extends AbstractPlugin {
                                 individualFrames = await Plugin.mp4ToSplitImageArray(data!, tempDir);
                             } else if (photo!.extension === "gif") {
                                 // Split into individual frames using convert
-                                console.log("gif");
                                 individualFrames = await Plugin.gifToSplitImageArray(data!, tempDir);
                             }
 
@@ -113,11 +110,7 @@ export class Plugin extends AbstractPlugin {
                                 await Plugin.imageFryArray(individualFrames);
                             }
 
-                            console.log("framerate", framerate);
                             finalAnimation = await Plugin.imageFramesToMp4(tempDir, framerate);
-                            console.log("Individual frames: ", individualFrames);
-                            console.log("Final image", finalAnimation);
-
                             data = finalAnimation;
 
                         } else {
@@ -195,7 +188,6 @@ export class Plugin extends AbstractPlugin {
                     return;
                 }
 
-                console.log("stdout", eval(stdout));
                 resolve(Math.round(+eval(stdout)));
             });
         });
