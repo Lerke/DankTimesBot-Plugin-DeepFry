@@ -20,7 +20,7 @@ export class Plugin extends AbstractPlugin {
     private static readonly MAX_FRY_FACTOR = 100;
 
     constructor() {
-        super("DeepFry", "1.0.1");
+        super("DeepFry", "1.0.2");
         this._hasDependencies = Plugin.checkSystemDependencies();
         if (!this._hasDependencies) {
             console.log("DeepFry: ImageMagick not found! Plugin cannot function");
