@@ -273,7 +273,7 @@ export class Plugin extends AbstractPlugin {
                 case 1:
                     return "treble 35";
                 case 2:
-                    return "chorus 0.5 0.9 50 0.4 0.25 2 −t 60 0.32 0.4 2.3 −t 40 0.3 0.3 1.3 −s";
+                    return "bass 25";
                 case 3:
                     return "downsample 4";
                 case 4:
@@ -315,7 +315,7 @@ export class Plugin extends AbstractPlugin {
 
         const filterPathString = filterPath.join(" : ");
         const output = `${path}_fried.wav`;
-        const soxCmd = `opusdec --force-wav ${path} ${path}_wav.wav | sox '${path}_wav.wav' '${output}' ${filterPathString}`;
+        const soxCmd = `sox '${path}' '${output}' ${filterPathString}`;
 
         return new Promise((resolve, reject) => {
             exec(soxCmd, (err, stdout, stderr) => {
