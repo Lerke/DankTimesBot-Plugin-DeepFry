@@ -204,6 +204,8 @@ export class Plugin extends AbstractPlugin {
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
+                    console.log(err);
+                    console.log(stderr);
                     reject(err);
                     return;
                 }
@@ -219,6 +221,8 @@ export class Plugin extends AbstractPlugin {
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
+                    console.log(err);
+                    console.log(stderr);
                     reject(err);
                     return;
                 }
@@ -233,6 +237,8 @@ export class Plugin extends AbstractPlugin {
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
+                    console.log(err);
+                    console.log(stderr);
                     reject(err);
                     return;
                 }
@@ -254,6 +260,8 @@ export class Plugin extends AbstractPlugin {
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
+                    console.log(err);
+                    console.log(stderr);
                     reject(err);
                     return;
                 }
