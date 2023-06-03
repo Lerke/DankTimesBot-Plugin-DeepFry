@@ -5,6 +5,10 @@ the frying algorithm is ran on your photo. Max is 100, but anything over 30 or s
 
 ## Changelog
 
+### 1.0.3
+
+- You can now deepfry audio and voice
+- 
 ### 1.0.2
 
 - You can now deepfry mp4s and gifs

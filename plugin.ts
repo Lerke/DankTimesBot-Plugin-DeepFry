@@ -20,7 +20,7 @@ export class Plugin extends AbstractPlugin {
     private static readonly MAX_FRY_FACTOR = 100;
 
     constructor() {
-        super("DeepFry", "1.0.2");
+        super("DeepFry", "1.0.3");
         this._hasDependencies = Plugin.checkSystemDependencies();
         if (!this._hasDependencies) {
             console.log("DeepFry: ImageMagick or ffmpeg not found! Plugin cannot function");
@@ -43,12 +43,19 @@ export class Plugin extends AbstractPlugin {
 
         // Check if message has a photo
         let photo: PhotoSize | undefined = undefined;
+        let audio: TelegramBot.Audio | undefined = undefined;
+        let voice: TelegramBot.Voice | undefined = undefined;
         const isPhoto = !!msg.photo;
         const isPhotoReply = !!msg.reply_to_message?.photo;
         const isSticker = !!msg.sticker;
         const isStickerReply = !!msg.reply_to_message?.sticker;
         const isAnimation = !!msg.animation;
         const isAnimationReply = !!msg.reply_to_message?.animation;
+        const isAudio = !!msg.audio;
+        const isAudioReply = !!msg.reply_to_message?.audio;
+        const isVoice = !!msg.voice;
+        const isVoiceReply = msg.reply_to_message!.voice;
+
 
         if (isPhotoReply) {
             const largestPhoto =
@@ -80,6 +87,14 @@ export class Plugin extends AbstractPlugin {
                 height: msg.reply_to_message!.animation!.height,
                 fileId: msg.reply_to_message!.animation!.file_id
             });
+        } else if(isAudio) {
+            audio = msg.audio!;
+        } else if(isAudioReply) {
+            audio = msg.reply_to_message!.audio!;
+        } else if(isVoice) {
+            voice = msg.voice;
+        } else if(isVoiceReply) {
+            voice = msg.reply_to_message!.voice;
         }
 
         if (photo) {
@@ -91,7 +106,7 @@ export class Plugin extends AbstractPlugin {
                     try {
                         const fryFactor = Plugin.getDeepFryScaleRatio(msg);
 
-                        if (photo.extension === "mp4" || photo.extension === "gif") {
+                        if (photo!.extension === "mp4" || photo!.extension === "gif") {
                             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "dtb-deepfry"));
                             let individualFrames: string[] = [];
                             let finalAnimation = "";
@@ -136,7 +151,26 @@ export class Plugin extends AbstractPlugin {
                         }
                     }
                 });
-        } else {
+        }
+        else if (audio) {
+            this.retrieveFile(chat.id, audio.file_id)
+                .then(async data => {
+                    const fryFactor = Plugin.getDeepFryScaleRatio(msg);
+                    const outputAudio = await Plugin.audioFry(data!, fryFactor);
+                    const fryCaption = `🍟 I fried your audio ${fryFactor} times!`;
+                    await this.sendFile(chat.id, outputAudio!, msg.message_id, false, fryCaption, "audio");
+                });
+        } else if(voice) {
+            this.retrieveFile(chat.id, voice.file_id)
+                .then(async data => {
+                    const fryFactor = Plugin.getDeepFryScaleRatio(msg);
+                    const outputAudio = await Plugin.audioFry(data!, fryFactor);
+                    const fryCaption = `🍟 I fried your audio ${fryFactor} times!`;
+                    await this.sendFile(chat.id, outputAudio!, msg.message_id, false, fryCaption, "voice");
+
+                });
+        }
+        else {
             await this.sendMessage(chat.id, "🍟 I don't know how to fry that", msg.message_id);
         }
 
@@ -147,7 +181,8 @@ export class Plugin extends AbstractPlugin {
         try {
             const outputIm = execSync("which convert");
             const outputFfmpeg = execSync("which ffmpeg");
-            return /convert/.test(outputIm.toString()) && /ffmpeg/.test(outputFfmpeg.toString());
+            const outputSox = execSync("which sox");
+            return /convert/.test(outputIm.toString()) && /ffmpeg/.test(outputFfmpeg.toString()) && /sox/.test(outputSox.toString());
         } catch (e) {
             console.log(e.stdout);
             console.log(e);
@@ -223,6 +258,70 @@ export class Plugin extends AbstractPlugin {
                     return;
                 }
                 resolve(`${imagePath}/output.mp4`);
+            });
+        });
+    }
+
+    private static async audioFry(path: string, passes:  number): Promise<string> {
+        const filterPath = Array.from({length: passes})
+            .map(f => {
+                const seed = Math.floor(Math.random() * 19) % 19;
+                switch(seed) {
+                case 0:
+                    // Bass boost that bitch
+                    return "bass 35";
+                case 1:
+                    return "treble 35";
+                case 2:
+                    return "chorus 0.5 0.9 50 0.4 0.25 2 −t 60 0.32 0.4 2.3 −t 40 0.3 0.3 1.3 −s";
+                case 3:
+                    return "delay 0 .05 .1 .15 .2 .25";
+                case 4:
+                    return "downsample 2";
+                case 5:
+                    return "echo 0.8 0.9 1000 0.3";
+                case 6:
+                    return "gain 6";
+                case 7:
+                    return "phaser 0.89 0.85 1 0.24 2 −t";
+                case 8:
+                    return "speed 1.35";
+                case 9:
+                    return "speed 0.65";
+                case 10:
+                    return "stretch 1.35";
+                case 11:
+                    return "stretch 0.35";
+                case 12:
+                    return "tempo 1.25";
+                case 13:
+                    return "tempo 0.75";
+                case 14:
+                    return "tremolo 40";
+                case 15:
+                    return "tremolo 80";
+                case 16:
+                    return "upsample 2";
+                case 17:
+                    return "vol 2";
+                case 18:
+                    return "vol -2";
+                default:
+                    return "";
+                }
+            });
+
+        const filterPathString = filterPath.join(" : ");
+        const output = `${path}_fried.wav`;
+        const soxCmd = `sox '${path}' '${output}' ${filterPathString}`;
+
+        return new Promise((resolve, reject) => {
+            exec(soxCmd, (err, stdout, stderr) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(output);
             });
         });
     }
