@@ -274,16 +274,17 @@ export class Plugin extends AbstractPlugin {
 
     private static async imageFryArray(paths: string[]): Promise<any> {
         const frySeed = Math.floor(Math.random() * 23);
-        const animationFrames = this.chunk(paths, 5);
+        const animationFrames = [...this.chunk(paths, 5)];
         for (const frameBatch of animationFrames) {
             await Promise.allSettled(frameBatch.map((p: string) => Plugin.imageFry(p, frySeed)));
         }
     }
 
-    private static* chunk(array: any[], n: number) {
-        for (let i = 0; i < array.length; i += n) {
-            yield array.slice(i, i + n);
-        }
+    private static chunk(array: any[], n: number) {
+        return Array.from(
+            new Array(Math.ceil(array.length / n)),
+            (_, i) => array.slice(i * n, i * n + n)
+        );
     }
 
     private static async imageFramesToMp4(imagePath: string, framerate: number): Promise<string> {
