@@ -283,7 +283,8 @@ export class Plugin extends AbstractPlugin {
                 case 6:
                     return "gain 8";
                 case 7:
-                    return "phaser 0.89 0.85 1 0.24 2 −t";
+                    return "gain 4";
+                    // return "phaser 0.89 0.85 1 0.24 2 −t";
                 case 8:
                     return "speed 1.65";
                 case 9:
@@ -315,15 +316,26 @@ export class Plugin extends AbstractPlugin {
 
         const filterPathString = filterPath.join(" : ");
         const output = `${path}_fried.wav`;
-        const soxCmd = `sox '${path}' '${output}' ${filterPathString}`;
+        const soxCmd = `sox '${path}_wav.wav' '${output}' ${filterPathString}`;
 
         return new Promise((resolve, reject) => {
-            exec(soxCmd, (err, stdout, stderr) => {
-                if (err) {
-                    reject(err);
+            console.log("fry");
+            exec(`opusdec --force-wav '${path}' '${path}_wav.wav'`, (errConvert, stdoutConvert, stderrConvert) => {
+                if(errConvert) {
+                    console.log(errConvert);
+                    reject(errConvert);
                     return;
                 }
-                resolve(output);
+
+                exec(soxCmd, (err, stdout, stderr) => {
+                    if (err) {
+                        console.log(err);
+                        reject(err);
+                        return;
+                    }
+                    console.log(output);
+                    resolve(output);
+                });
             });
         });
     }
