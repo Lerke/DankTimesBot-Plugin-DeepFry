@@ -315,7 +315,7 @@ export class Plugin extends AbstractPlugin {
 
         const filterPathString = filterPath.join(" : ");
         const output = `${path}_fried.wav`;
-        const soxCmd = `sox '${path}' '${output}' ${filterPathString}`;
+        const soxCmd = `opusdec --force-wav ${path} ${path}_wav.wav | sox '${path}_wav.wav' '${output}' ${filterPathString}`;
 
         return new Promise((resolve, reject) => {
             exec(soxCmd, (err, stdout, stderr) => {
