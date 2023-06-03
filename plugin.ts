@@ -110,7 +110,7 @@ export class Plugin extends AbstractPlugin {
                         let fryFactor = Plugin.getDeepFryScaleRatio(msg);
 
                         if (photo!.extension === "mp4" || photo!.extension === "gif") {
-                            if(Plugin.ANIMATION_FRY_LOCK) {
+                            if (Plugin.ANIMATION_FRY_LOCK) {
                                 await this.sendMessage(chat.id, "🍟 I'm already frying a gif", msg.message_id);
                                 return;
                             }
@@ -274,7 +274,16 @@ export class Plugin extends AbstractPlugin {
 
     private static async imageFryArray(paths: string[]): Promise<any> {
         const frySeed = Math.floor(Math.random() * 23);
-        const deepFryPan = await Promise.allSettled(paths.map((p: string) => Plugin.imageFry(p, frySeed)));
+        const animationFrames = this.chunk(paths, 10);
+        for (const frameBatch of animationFrames) {
+            await Promise.allSettled(frameBatch.map((p: string) => Plugin.imageFry(p, frySeed)));
+        }
+    }
+
+    private static* chunk(array: any[], n: number) {
+        for (let i = 0; i < array.length; i += n) {
+            yield array.slice(i, i + n);
+        }
     }
 
     private static async imageFramesToMp4(imagePath: string, framerate: number): Promise<string> {
