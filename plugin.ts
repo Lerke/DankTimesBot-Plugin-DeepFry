@@ -23,7 +23,7 @@ export class Plugin extends AbstractPlugin {
         super("DeepFry", "1.0.2");
         this._hasDependencies = Plugin.checkSystemDependencies();
         if (!this._hasDependencies) {
-            console.log("DeepFry: ImageMagick not found! Plugin cannot function");
+            console.log("DeepFry: ImageMagick or ffmpeg not found! Plugin cannot function");
         }
     }
 
