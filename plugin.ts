@@ -1,6 +1,5 @@
 import { exec, execSync } from "child_process";
 import TelegramBot from "node-telegram-bot-api";
-import { tmpdir } from "os";
 import { BotCommand } from "../../src/bot-commands/bot-command";
 import { Chat } from "../../src/chat/chat";
 import { User } from "../../src/chat/user/user";
@@ -18,6 +17,7 @@ export class Plugin extends AbstractPlugin {
 
     private static readonly DEFAULT_FRY_FACTOR = 10;
     private static readonly MAX_FRY_FACTOR = 100;
+    private static IS_DEBUG = false;
 
     constructor() {
         super("DeepFry", "1.0.3");
@@ -25,6 +25,8 @@ export class Plugin extends AbstractPlugin {
         if (!this._hasDependencies) {
             console.log("DeepFry: ImageMagick or ffmpeg not found! Plugin cannot function");
         }
+
+        Plugin.IS_DEBUG = (process.env.DEEPFRY_DEBUG === "true");
     }
 
     /**
@@ -87,13 +89,13 @@ export class Plugin extends AbstractPlugin {
                 height: msg.reply_to_message!.animation!.height,
                 fileId: msg.reply_to_message!.animation!.file_id
             });
-        } else if(isAudio) {
+        } else if (isAudio) {
             audio = msg.audio!;
-        } else if(isAudioReply) {
+        } else if (isAudioReply) {
             audio = msg.reply_to_message!.audio!;
-        } else if(isVoice) {
+        } else if (isVoice) {
             voice = msg.voice;
-        } else if(isVoiceReply) {
+        } else if (isVoiceReply) {
             voice = msg.reply_to_message!.voice;
         }
 
@@ -110,13 +112,11 @@ export class Plugin extends AbstractPlugin {
                             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "dtb-deepfry"));
                             let individualFrames: string[] = [];
                             let finalAnimation = "";
-                            let  framerate = 24;
+                            let framerate = 24;
                             if (photo!.extension === "mp4") {
-                                // Split into individual frames using ffmpeg
                                 framerate = await Plugin.mp4Framerate(data!);
                                 individualFrames = await Plugin.mp4ToSplitImageArray(data!, tempDir);
                             } else if (photo!.extension === "gif") {
-                                // Split into individual frames using convert
                                 individualFrames = await Plugin.gifToSplitImageArray(data!, tempDir);
                             }
 
@@ -147,30 +147,44 @@ export class Plugin extends AbstractPlugin {
                         console.log(e);
                     } finally {
                         if (tempDir) {
-                            fs.rmSync(tempDir, {recursive: true});
+                            try {
+                                fs.rmSync(data);
+                                fs.rmSync(tempDir, {recursive: true});
+                            } catch (e) {
+                                Plugin.FryLog("Could not remove: " + [data, tempDir] + "\n" + e);
+                            }
                         }
                     }
                 });
-        }
-        else if (audio) {
+        } else if (audio) {
             this.retrieveFile(chat.id, audio.file_id)
                 .then(async data => {
                     const fryFactor = Plugin.getDeepFryScaleRatio(msg);
                     const outputAudio = await Plugin.audioFry(data!, fryFactor);
                     const fryCaption = `🍟 I fried your audio ${fryFactor} times!`;
                     await this.sendFile(chat.id, outputAudio!, msg.message_id, false, fryCaption, "audio");
+                    try {
+                        fs.rmSync(data);
+                        fs.rmSync(outputAudio);
+                    } catch (e) {
+                        Plugin.FryLog("Could not remove: " + [data, outputAudio] + "\n" + e);
+                    }
                 });
-        } else if(voice) {
+        } else if (voice) {
             this.retrieveFile(chat.id, voice.file_id)
                 .then(async data => {
                     const fryFactor = Plugin.getDeepFryScaleRatio(msg);
                     const outputAudio = await Plugin.audioFry(data!, fryFactor);
                     const fryCaption = `🍟 I fried your audio ${fryFactor} times!`;
                     await this.sendFile(chat.id, outputAudio!, msg.message_id, false, fryCaption, "voice");
-
+                    try {
+                        fs.rmSync(data);
+                        fs.rmSync(outputAudio);
+                    } catch (e) {
+                        Plugin.FryLog("Could not remove: " + [data, outputAudio] + "\n" + e);
+                    }
                 });
-        }
-        else {
+        } else {
             await this.sendMessage(chat.id, "🍟 I don't know how to fry that", msg.message_id);
         }
 
@@ -184,8 +198,8 @@ export class Plugin extends AbstractPlugin {
             const outputSox = execSync("which sox");
             return /convert/.test(outputIm.toString()) && /ffmpeg/.test(outputFfmpeg.toString()) && /sox/.test(outputSox.toString());
         } catch (e) {
-            console.log(e.stdout);
-            console.log(e);
+            Plugin.FryLog(e.stdout);
+            Plugin.FryLog(e);
             return false;
         }
     }
@@ -204,8 +218,8 @@ export class Plugin extends AbstractPlugin {
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
-                    console.log(err);
-                    console.log(stderr);
+                    Plugin.FryLog(err);
+                    Plugin.FryLog(stderr);
                     reject(err);
                     return;
                 }
@@ -221,8 +235,8 @@ export class Plugin extends AbstractPlugin {
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
-                    console.log(err);
-                    console.log(stderr);
+                    Plugin.FryLog(err);
+                    Plugin.FryLog(stderr);
                     reject(err);
                     return;
                 }
@@ -237,8 +251,8 @@ export class Plugin extends AbstractPlugin {
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
-                    console.log(err);
-                    console.log(stderr);
+                    Plugin.FryLog(err);
+                    Plugin.FryLog(stderr);
                     reject(err);
                     return;
                 }
@@ -260,8 +274,8 @@ export class Plugin extends AbstractPlugin {
         return new Promise((resolve, reject) => {
             exec(command, (err, stdout, stderr) => {
                 if (err) {
-                    console.log(err);
-                    console.log(stderr);
+                    Plugin.FryLog(err);
+                    Plugin.FryLog(stderr);
                     reject(err);
                     return;
                 }
@@ -270,11 +284,11 @@ export class Plugin extends AbstractPlugin {
         });
     }
 
-    private static async audioFry(path: string, passes:  number): Promise<string> {
+    private static async audioFry(path: string, passes: number): Promise<string> {
         const filterPath = Array.from({length: passes})
             .map(f => {
                 const seed = Math.floor(Math.random() * 19) % 19;
-                switch(seed) {
+                switch (seed) {
                 case 0:
                     // Bass boost that bitch
                     return "bass 55";
@@ -329,19 +343,19 @@ export class Plugin extends AbstractPlugin {
         return new Promise((resolve, reject) => {
             console.log("fry");
             exec(`opusdec --force-wav '${path}' '${path}_wav.wav'`, (errConvert, stdoutConvert, stderrConvert) => {
-                if(errConvert) {
-                    console.log(errConvert);
+                if (errConvert) {
+                    Plugin.FryLog(errConvert);
                     reject(errConvert);
                     return;
                 }
 
                 exec(soxCmd, (err, stdout, stderr) => {
                     if (err) {
-                        console.log(err);
+                        Plugin.FryLog(err);
                         reject(err);
                         return;
                     }
-                    console.log(output);
+                    Plugin.FryLog(output);
                     resolve(output);
                 });
             });
@@ -447,6 +461,12 @@ export class Plugin extends AbstractPlugin {
                 resolve(stdout);
             });
         });
+    }
+
+    private static FryLog(log: any) {
+        if (Plugin.IS_DEBUG) {
+            console.log(`🍟: ${log}`);
+        }
     }
 }
 
