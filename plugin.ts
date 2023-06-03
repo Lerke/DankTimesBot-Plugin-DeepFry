@@ -139,7 +139,7 @@ export class Plugin extends AbstractPlugin {
                         console.log(e);
                     } finally {
                         if (tempDir) {
-                            // fs.rmSync(tempDir, {recursive: true});
+                            fs.rmSync(tempDir, {recursive: true});
                         }
                     }
                 });
