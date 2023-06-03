@@ -54,7 +54,7 @@ export class Plugin extends AbstractPlugin {
         const isAudio = !!msg.audio;
         const isAudioReply = !!msg.reply_to_message?.audio;
         const isVoice = !!msg.voice;
-        const isVoiceReply = msg.reply_to_message!.voice;
+        const isVoiceReply = !!msg.reply_to_message?.voice;
 
 
         if (isPhotoReply) {
